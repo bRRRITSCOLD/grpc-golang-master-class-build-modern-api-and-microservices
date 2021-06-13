@@ -29,6 +29,8 @@ func main() {
 	doServerStreaming(client)
 
 	doClientStreaming(client)
+
+	doBiDiStreaming(client)
 }
 
 func doUnary(client greetpb.GreetServiceClient) {
@@ -107,4 +109,55 @@ func doClientStreaming(client greetpb.GreetServiceClient) {
 		return
 	}
 	fmt.Printf("LongGreet response: %v\n", res.GetResult())
+}
+
+func doBiDiStreaming(client greetpb.GreetServiceClient) {
+	fmt.Println("Starting to do a bi-directional streaming RPC...")
+
+	stream, err := client.GreetEveryone(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to call GreetEveryone function: %v\n", err)
+		return
+	}
+
+	waitc := make(chan struct{})
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			req := &greetpb.GreetEveryoneRequest{
+				Greeting: &greetpb.Greeting{
+					FirstName: "Bobby " + strconv.Itoa(i+1),
+					LastName:  "Bushay " + strconv.Itoa(i+1),
+				},
+			}
+			fmt.Printf("Sending request: %v\n", req)
+			stream.Send(req)
+			time.Sleep(100 * time.Millisecond)
+		}
+		err = stream.CloseSend()
+		if err != nil {
+			log.Fatalf("Failed to close GreetEveryone stream: %v\n", err)
+			return
+		}
+	}()
+
+	go func() {
+		for {
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("Failed to read GreetManyTimes stream: %v\n", err)
+				break
+			}
+
+			fmt.Printf("Successfully read GreetManyTimes stream: %v\n", msg.GetResult())
+		}
+		close(waitc)
+	}()
+
+	<-waitc
+
+	fmt.Println("GreetEveryone successfully called")
 }

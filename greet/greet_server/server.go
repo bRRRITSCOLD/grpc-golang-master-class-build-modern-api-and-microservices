@@ -6,7 +6,9 @@ import (
 	"grpc-golang-master-class-build-modern-api-and-microservices/greet/greetpb"
 	"log"
 	"net"
+	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 )
@@ -23,6 +25,20 @@ func (s *server) Greet(ctx context.Context, req *greetpb.GreetRequest) (*greetpb
 		Result: "Hello " + firstName + " " + lastName,
 	}
 	return res, nil
+}
+
+func (s *server) GreetManyTimes(req *greetpb.GreetManyTimesRequest, stream greetpb.GreetService_GreetManyTimesServer) error {
+	fmt.Printf("GreetManyTimes function was invoked with %v", req)
+	firstName := strings.TrimSpace(req.GetGreeting().GetFirstName())
+	lastName := strings.TrimSpace(req.GetGreeting().GetLastName())
+	for i := 0; i < 10; i++ {
+		res := &greetpb.GreetManyTimesResponse{
+			Result: "Hello " + firstName + " " + lastName + " number " + strconv.Itoa(i),
+		}
+		stream.Send(res)
+		time.Sleep(1000 * time.Millisecond)
+	}
+	return nil
 }
 
 func main() {

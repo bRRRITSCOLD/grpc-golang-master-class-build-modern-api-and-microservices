@@ -6,6 +6,7 @@ import (
 	"grpc-golang-master-class-build-modern-api-and-microservices/calculator/calculatorpb"
 	"log"
 	"net"
+	"time"
 
 	"google.golang.org/grpc"
 )
@@ -22,6 +23,27 @@ func (s *server) Sum(ctx context.Context, req *calculatorpb.SumRequest) (*calcul
 		Result: firstNumber + secondNumber,
 	}
 	return res, nil
+}
+
+func (s *server) PrimeNumberDecomposition(req *calculatorpb.PrimeNumberDecompositionRequest, stream calculatorpb.CalculatorService_PrimeNumberDecompositionServer) error {
+	fmt.Printf("PrimeNumberDecomposition function was invoked with %v", req)
+
+	number := req.GetNumber()
+	divisor := int32(2)
+
+	for number > 1 {
+		if number%divisor == 0 {
+			stream.Send(&calculatorpb.PrimeNumberDecompositionResponse{
+				PrimeFactor: divisor,
+			})
+			number = number / divisor
+		} else {
+			divisor++
+			fmt.Printf("PrimeNumberDecomposition divisor has increased %v\n", divisor)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	return nil
 }
 
 func main() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"grpc-golang-master-class-build-modern-api-and-microservices/calculator/calculatorpb"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -16,7 +17,7 @@ type server struct {
 }
 
 func (s *server) Sum(ctx context.Context, req *calculatorpb.SumRequest) (*calculatorpb.SumResponse, error) {
-	fmt.Printf("Sum function was invoked with %v", req)
+	fmt.Printf("Sum function was invoked with %v\n", req)
 	firstNumber := req.GetFirstNumber()
 	secondNumber := req.GetSecondNumber()
 	res := &calculatorpb.SumResponse{
@@ -26,7 +27,7 @@ func (s *server) Sum(ctx context.Context, req *calculatorpb.SumRequest) (*calcul
 }
 
 func (s *server) PrimeNumberDecomposition(req *calculatorpb.PrimeNumberDecompositionRequest, stream calculatorpb.CalculatorService_PrimeNumberDecompositionServer) error {
-	fmt.Printf("PrimeNumberDecomposition function was invoked with %v", req)
+	fmt.Printf("PrimeNumberDecomposition function was invoked with %v\n", req)
 
 	number := req.GetNumber()
 	divisor := int32(2)
@@ -46,18 +47,53 @@ func (s *server) PrimeNumberDecomposition(req *calculatorpb.PrimeNumberDecomposi
 	return nil
 }
 
+func (s *server) ComputeAverage(stream calculatorpb.CalculatorService_ComputeAverageServer) error {
+	fmt.Println("ComputeAverage function was invoked")
+
+	total := 0
+	amountOfNumbers := 0
+
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			// done reading stream
+			fmt.Printf("ComputeAverage function total %v\n", total)
+			fmt.Printf("ComputeAverage function amountOfNumbers %v\n", amountOfNumbers)
+			er := stream.SendAndClose(&calculatorpb.ComputeAverageResponse{
+				Average: int32(total / amountOfNumbers),
+			})
+			if er != nil {
+				log.Fatalf("Error while sending and closing client stream: %v\n", er)
+				return err
+			}
+			fmt.Println("ComputeAverage function was successful")
+			return nil
+		}
+		if err != nil {
+			log.Fatalf("Error while reading client stream: %v\n", err)
+			return err
+		}
+
+		number := req.GetNumber()
+		total += int(number)
+		amountOfNumbers += 1
+
+		fmt.Printf("ComputeAverage function adding number %v\n", number)
+	}
+}
+
 func main() {
 	fmt.Println("calculator server")
 
 	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		log.Fatalf("Failed to listen: %v\n", err)
 	}
 
 	s := grpc.NewServer()
 	calculatorpb.RegisterCalculatorServiceServer(s, &server{})
 
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		log.Fatalf("Failed to serve: %v\n", err)
 	}
 }

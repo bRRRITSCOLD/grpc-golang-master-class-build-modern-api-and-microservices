@@ -30,6 +30,8 @@ func main() {
 	doServerStreaming(client)
 
 	doClientStreaming(client)
+
+	doBiDiStreaming(client)
 }
 
 func doUnary(client calculatorpb.CalculatorServiceClient) {
@@ -106,4 +108,52 @@ func doClientStreaming(client calculatorpb.CalculatorServiceClient) {
 		return
 	}
 	fmt.Printf("ComputeAverage response: %v\n", res.GetAverage())
+}
+
+func doBiDiStreaming(client calculatorpb.CalculatorServiceClient) {
+	fmt.Println("Starting to do a bi-directional streaming RPC...")
+
+	stream, err := client.FindMaximum(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to call FindMaximum function: %v\n", err)
+		return
+	}
+
+	waitc := make(chan struct{})
+
+	go func() {
+		for i := 0; i < 10; i++ {
+			req := &calculatorpb.FindMaximumRequest{
+				Number: int32(randomNumber()),
+			}
+			fmt.Printf("Sending request: %v\n", req)
+			stream.Send(req)
+			time.Sleep(100 * time.Millisecond)
+		}
+		err = stream.CloseSend()
+		if err != nil {
+			log.Fatalf("Failed to close FindMaximum stream: %v\n", err)
+			return
+		}
+	}()
+
+	go func() {
+		for {
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("Failed to read FindMaximum stream: %v\n", err)
+				break
+			}
+
+			fmt.Printf("Successfully read FindMaximum stream: %v\n", msg.GetMaximum())
+		}
+		close(waitc)
+	}()
+
+	<-waitc
+
+	fmt.Println("FindMaximum successfully called")
 }

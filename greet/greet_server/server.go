@@ -11,7 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 type server struct {
@@ -111,18 +116,54 @@ func (s *server) GreetEveryone(stream greetpb.GreetService_GreetEveryoneServer) 
 	}
 }
 
+func (s *server) GreetWithDeadline(ctx context.Context, req *greetpb.GreetWithDeadlineRequest) (*greetpb.GreetWithDeadlineResponse, error) {
+	fmt.Printf("GreetWithDeadline function was invoked with %v\n", req)
+	for i := 0; i < 4; i++ {
+		if ctx.Err() == context.Canceled {
+			fmt.Println("client canceled request to GreetWithDeadline")
+			return nil, status.Error(codes.Canceled, "client canceled request")
+		}
+		time.Sleep(1 * time.Second)
+	}
+	firstName := strings.TrimSpace(req.GetGreeting().GetFirstName())
+	lastName := strings.TrimSpace(req.GetGreeting().GetLastName())
+	res := &greetpb.GreetWithDeadlineResponse{
+		Result: "Hello " + firstName + " " + lastName,
+	}
+	fmt.Println("GreetWithDeadline function was successful")
+	return res, nil
+}
+
 func main() {
 	fmt.Println("greet server")
+
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Failed to load env: %v", err)
+		return
+	}
 
 	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
+		return
 	}
 
-	s := grpc.NewServer()
+	certFile := "ssl/server.crt"
+	keyFile := "ssl/server.pem"
+
+	creds, sslErr := credentials.NewServerTLSFromFile(certFile, keyFile)
+	if sslErr != nil {
+		log.Fatalf("Failed to load ssl files: %v", sslErr)
+		return
+	}
+
+	s := grpc.NewServer(grpc.Creds(creds))
 	greetpb.RegisterGreetServiceServer(s, &server{})
+
+	reflection.Register(s)
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
+		return
 	}
 }

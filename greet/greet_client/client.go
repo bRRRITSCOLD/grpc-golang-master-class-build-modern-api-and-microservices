@@ -10,14 +10,24 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
 	fmt.Println("Hello I am a grpc client")
 
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	certFile := "ssl/ca.crt"
+	creds, sslErr := credentials.NewClientTLSFromFile(certFile, "")
+	if sslErr != nil {
+		log.Fatalf("Failed to load ssl files: %v", sslErr)
+		return
+	}
+
+	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Fatalf("Failed to dial: %v", err)
+		return
 	}
 	defer conn.Close()
 
@@ -26,11 +36,14 @@ func main() {
 
 	doUnary(client)
 
-	doServerStreaming(client)
+	// doServerStreaming(client)
 
-	doClientStreaming(client)
+	// doClientStreaming(client)
 
-	doBiDiStreaming(client)
+	// doBiDiStreaming(client)
+
+	// doUnaryGreetWithDeadline(client, 5*time.Second)
+	// doUnaryGreetWithDeadline(client, 1*time.Second)
 }
 
 func doUnary(client greetpb.GreetServiceClient) {
@@ -160,4 +173,33 @@ func doBiDiStreaming(client greetpb.GreetServiceClient) {
 	<-waitc
 
 	fmt.Println("GreetEveryone successfully called")
+}
+
+func doUnaryGreetWithDeadline(client greetpb.GreetServiceClient, timeout time.Duration) {
+	fmt.Println("Starting to do a unary RPC...")
+
+	req := &greetpb.GreetWithDeadlineRequest{
+		Greeting: &greetpb.Greeting{
+			FirstName: "Bobby",
+			LastName:  "Bushay",
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	res, err := client.GreetWithDeadline(ctx, req)
+	if err != nil {
+		respErr, ok := status.FromError(err)
+		if ok {
+			fmt.Printf("Failed to call GreetWithDeadline function Message: %v\n", respErr.Message())
+			fmt.Printf("Failed to call GreetWithDeadline function Code: %v\n", respErr.Code().String())
+			log.Fatalf("Failed to call GreetWithDeadline function Details: %v\n", respErr.Details()...)
+			return
+		}
+		log.Fatalf("Failed to get GreetWithDeadline grpc error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Successfully called GreetWithDeadline function: %v\n", res)
 }

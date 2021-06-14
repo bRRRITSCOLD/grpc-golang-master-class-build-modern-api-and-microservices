@@ -10,12 +10,21 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
 	fmt.Println("Hello I am a grpc client")
 
-	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
+	certFile := "ssl/ca.crt"
+	creds, sslErr := credentials.NewClientTLSFromFile(certFile, "")
+	if sslErr != nil {
+		log.Fatalf("Failed to load ssl files: %v", sslErr)
+		return
+	}
+
+	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Fatalf("Failed to dial: %v\n", err)
 		return
@@ -25,13 +34,17 @@ func main() {
 	client := calculatorpb.NewCalculatorServiceClient(conn)
 	// fmt.Printf("Created grpc client: %f", client)
 
-	doUnary(client)
+	// doUnary(client)
 
-	doServerStreaming(client)
+	// doServerStreaming(client)
 
-	doClientStreaming(client)
+	// doClientStreaming(client)
 
-	doBiDiStreaming(client)
+	// doBiDiStreaming(client)
+
+	doSquareRootUnary(client)
+
+	doSquareRootErrorUnary(client)
 }
 
 func doUnary(client calculatorpb.CalculatorServiceClient) {
@@ -156,4 +169,39 @@ func doBiDiStreaming(client calculatorpb.CalculatorServiceClient) {
 	<-waitc
 
 	fmt.Println("FindMaximum successfully called")
+}
+
+func doSquareRootUnary(client calculatorpb.CalculatorServiceClient) {
+	fmt.Println("Starting to do a unary SquareRoot RPC...")
+
+	req := &calculatorpb.SquareRootRequest{
+		Number: 10,
+	}
+	res, err := client.SquareRoot(context.Background(), req)
+	if err != nil {
+		log.Fatalf("Failed to call SquareRoot function: %v\n", err)
+	}
+	fmt.Printf("Successfully called SquareRoot function: %v\n", res)
+}
+
+func doSquareRootErrorUnary(client calculatorpb.CalculatorServiceClient) {
+	fmt.Println("Starting to do a unary SquareRootError RPC...")
+
+	req := &calculatorpb.SquareRootRequest{
+		Number: -1,
+	}
+	res, err := client.SquareRoot(context.Background(), req)
+	if err != nil {
+		respErr, ok := status.FromError(err)
+		if ok {
+			fmt.Printf("Failed to call SquareRoot function Message: %v\n", respErr.Message())
+			fmt.Printf("Failed to call SquareRoot function Code: %v\n", respErr.Code().String())
+			log.Fatalf("Failed to call SquareRoot function Details: %v\n", respErr.Details()...)
+			return
+		}
+		log.Fatalf("Failed to get SquareRoot grpc error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Successfully called SquareRoot function: %v\n", res)
 }
